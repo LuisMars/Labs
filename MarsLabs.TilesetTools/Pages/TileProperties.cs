@@ -13,19 +13,83 @@ public partial class Tileset
         public int Col { get; set; }
         public string Name { get; set; }
         public string Id { get; set; }
-        public Dictionary<string, (object Value, string Type)?> Properties { get; set; }
+        public Dictionary<string, string> StringValues { get; set; } = [];
+        public Dictionary<string, bool> BoolValues { get; set; } = [];
+        public Dictionary<string, int> IntValues { get; set; } = [];
+        public Dictionary<string, float> FloatValues { get; set; } = [];
+        public Dictionary<string, string> PropertyTypes { get; set; } = [];
 
-        internal bool HasContent => !string.IsNullOrWhiteSpace(Name) || !string.IsNullOrWhiteSpace(Id) || Properties?.Count(p => p.Value?.Value is not null) > 0;
+        internal bool HasContent
+        {
+            get
+            {
+                return 
+                    !string.IsNullOrWhiteSpace(Name) || 
+                    !string.IsNullOrWhiteSpace(Id) || 
+                    StringValues?.Count(p => p.Value is not null) > 0 ||
+                    BoolValues?.Count(p => p.Value != default) > 0 ||
+                    FloatValues?.Count(p => p.Value != default) > 0 ||
+                    IntValues?.Count(p => p.Value != default) > 0
+                    ;
+            }
+        }
     }
 }
 
+public static class TypeExtensions
+{
+    public static float GetFloat(this object value)
+    {
+        if (value is float floatValue)
+        {
+            return floatValue;
+        }
+        else if (value is string stringfloatValue && float.TryParse(stringfloatValue, CultureInfo.InvariantCulture, out var parsedfloatValue))
+        {
+            return parsedfloatValue;
+        }
+        return 0;
+    }
+
+    public static int GetInt(this object value)
+    {
+        if (value is int intValue)
+        {
+            return intValue;
+        }
+        else if (value is string stringIntValue && int.TryParse(stringIntValue, CultureInfo.InvariantCulture, out var parsedIntValue))
+        {
+            return parsedIntValue;
+        }
+        return 0;
+    }
+
+    public static bool GetBool(this object value)
+    {
+        var boolenValue = false;
+        if (value is bool b)
+        {
+            return b;
+        }
+        return boolenValue;
+    }
+
+    public static string GetString(this object value)
+    {
+        if (value is string s)
+        {
+            return s;
+        }
+        return value?.ToString() ?? "";
+    }
+}
 
 public class TilePropertiesConverter : JsonConverter<TileProperties>
 {
     public override TileProperties Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         var tileProperties = new TileProperties();
-        tileProperties.Properties = new Dictionary<string, (object Value, string Type)?>();
+        //tileProperties.Properties = new Dictionary<string, ValueTypeTuple>();
 
         while (reader.Read())
         {
@@ -55,7 +119,7 @@ public class TilePropertiesConverter : JsonConverter<TileProperties>
                 // This is a simplistic approach; you'll need to handle actual types and errors.
                 var value = reader.GetString(); // Or use appropriate method to get the value based on type
                 var type = "String"; // Replace with actual logic to get the type.
-                tileProperties.Properties[propName] = (value, type);
+                //tileProperties.Properties[propName] = (value, type);
             }
         }
 
@@ -78,60 +142,36 @@ public class TilePropertiesConverter : JsonConverter<TileProperties>
             writer.WriteString("Id", value.Id);
         }
         // Flatten and write properties from the dictionary
-        if (value.Properties != null)
+        if (value.PropertyTypes != null)
         {
-            foreach (var prop in value.Properties)
+            foreach (var (name, type) in value.PropertyTypes)
             {
-                if (prop.Value.HasValue)
+                try
                 {
-                    try
+                    // You should implement a more robust type handling based on 'type' value.
+                    // Here's a simplistic example for illustration.
+                    switch (type)
                     {
-                        var (val, type) = prop.Value.Value;
-
-                        // You should implement a more robust type handling based on 'type' value.
-                        // Here's a simplistic example for illustration.
-                        switch (type)
-                        {
-                            case "int":
-                                if (val is int intValue)
-                                {
-                                    writer.WriteNumber(prop.Key, (int)val);
-                                }
-                                else if (val is string stringIntValue && int.TryParse(stringIntValue, out var parsedIntValue))
-                                {
-                                    writer.WriteNumber(prop.Key, parsedIntValue);
-                                }
-                                break;
-                            case "float":
-                                if (val is float floatValue)
-                                {
-                                    writer.WriteNumber(prop.Key, (float)val);
-                                }
-                                else if (val is string stringfloatValue && float.TryParse(stringfloatValue, CultureInfo.InvariantCulture, out var parsedfloatValue))
-                                {
-                                    writer.WriteNumber(prop.Key, parsedfloatValue);
-                                }
-                                break;
-                            case "string":
-                                writer.WriteString(prop.Key, (string)val);
-                                break;
-                            case "bool":
-                                var boolenValue = false;
-                                if (val is bool b)
-                                {
-                                    boolenValue = b;
-                                }
-                                writer.WriteBoolean(prop.Key, boolenValue);
-                                break;
-                            default:
-                                // Possibly throw an exception or handle unknown types
-                                break;
-                        }
+                        case "int":
+                            writer.WriteNumber(type, value.IntValues[name]);
+                            break;
+                        case "float":
+                            writer.WriteNumber(type, value.FloatValues[name]);
+                            break;
+                        case "string":
+                            writer.WriteString(type, value.StringValues[name]);
+                            break;
+                        case "bool":
+                            writer.WriteBoolean(type, value.BoolValues[name]);
+                            break;
+                        default:
+                            // Possibly throw an exception or handle unknown types
+                            break;
                     }
-                    catch (Exception ex)
-                    {
-                        Console.Error.WriteLine(ex);
-                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine(ex);
                 }
             }
         }

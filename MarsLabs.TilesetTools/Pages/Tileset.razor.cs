@@ -24,7 +24,7 @@ public partial class Tileset
     private Dictionary<(int X, int Y), TileProperties> Tiles { get; set; } = [];
     private TileProperties? SelectedTile { get; set; }
     private string CustomPropertyName { get; set; } = "";
-    private object CustomPropertyValue { get; set; } = "";
+    private string CustomPropertyValue { get; set; } = "";
     private string Output { get; set; } = "";
     private bool LastPanel1Status { get; set; }
     private bool LastPanel2Status { get; set; }
@@ -122,7 +122,7 @@ public partial class Tileset
         {
             foreach (var property in GlobalProperties)
             {
-                SetProperty(item.Value, property.Name, property.Type, null);
+                SetProperty(item.Value, property.Name, property.Type);
             }
         }
     }
@@ -131,29 +131,58 @@ public partial class Tileset
     {
         foreach (var item in Tiles)
         {
-            if (item.Value.Properties.TryGetValue(oldName, out var oldValue))
+            if (item.Value.StringValues.TryGetValue(oldName, out var oldValue))
             {
-                item.Value.Properties[newName] = oldValue;
-                item.Value.Properties.Remove(oldName);
+                item.Value.StringValues[newName] = oldValue;
+                item.Value.StringValues.Remove(oldName);
+            }
+            if (item.Value.BoolValues.TryGetValue(oldName, out var oldBoolValue))
+            {
+                item.Value.BoolValues[newName] = oldBoolValue;
+                item.Value.BoolValues.Remove(oldName);
+            }
+            if (item.Value.IntValues.TryGetValue(oldName, out var oldIntValue))
+            {
+                item.Value.IntValues[newName] = oldIntValue;
+                item.Value.IntValues.Remove(oldName);
+            }
+            if (item.Value.FloatValues.TryGetValue(oldName, out var oldFloatValue))
+            {
+                item.Value.FloatValues[newName] = oldFloatValue;
+                item.Value.FloatValues.Remove(oldName);
+            }
+
+            if (item.Value.PropertyTypes.TryGetValue(oldName, out var oldType))
+            {                      
+                item.Value.PropertyTypes[newName] = oldType;
+                item.Value.PropertyTypes.Remove(oldName);
             }
         }
     }
-    private void SaveProperty()
-    {
-        SetProperty(SelectedTile, CustomPropertyName, null, CustomPropertyValue);
-        ExportToJson();
-        CustomPropertyName = "";
-        CustomPropertyValue = "";
-    }
 
-    private static void SetProperty(TileProperties? tile, string propertyName, string propertyType, object propertyValue)
+    private static void SetProperty(TileProperties? tile, string propertyName, string propertyType)
     {
         if (tile is null || string.IsNullOrEmpty(propertyName))
         {
             return;
         }
-        tile.Properties ??= [];
-        tile.Properties[propertyName] = (propertyValue, propertyType);
+        tile.PropertyTypes ??= [];
+        tile.PropertyTypes[propertyName] = propertyType;
+        switch (propertyType)
+        {
+            case "string" when !tile.StringValues.ContainsKey(propertyName):
+                tile.StringValues[propertyName] = default;
+                break;
+            case "bool" when !tile.BoolValues.ContainsKey(propertyName):
+                tile.BoolValues[propertyName] = default;
+                break;
+            case "int" when !tile.IntValues.ContainsKey(propertyName):
+                tile.IntValues[propertyName] = default;
+                break;
+            case "float" when !tile.FloatValues.ContainsKey(propertyName):
+                tile.FloatValues[propertyName] = default;
+                break;
+        }
     }
 
     private void ExportToJson()

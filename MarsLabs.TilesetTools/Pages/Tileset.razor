@@ -2,8 +2,9 @@
 @using System.IO
 @using System.Text.Json
 
+<main class="tool-container">
 
-    <section>
+    <section class="tileset-container">
         @if (ImageData is not null)
         {
             <style>
@@ -17,9 +18,9 @@
                 }
 
 
-                .tileset .tile {
-                    border-color: @GridColor@(GridColorAlpha.ToString("X2"));
-                }
+                    .tileset .tile {
+                        border-color: @GridColor@(GridColorAlpha.ToString("X2"));
+                    }
 
             </style>
 
@@ -50,33 +51,53 @@
         }
     </section>
 
-    <aside>
-        <header role="group">
-            <button aria-current=@(CurrentTab == Tabs.Tileset) @onclick="@(() => CurrentTab = Tabs.Tileset)" >Tileset</button>
-            <button aria-current=@(CurrentTab == Tabs.Properties) @onclick="@(() => CurrentTab = Tabs.Properties)"  >Properties</button>
-            <button aria-current=@(CurrentTab == Tabs.Tile) @onclick="@(() => CurrentTab = Tabs.Tile)"  >Tile</button>
-            <button aria-current=@(CurrentTab == Tabs.Output) @onclick="@(() => CurrentTab = Tabs.Output)"  >Output</button>             
-        </header>
-        <footer>
-            @if (CurrentTab == Tabs.Tileset)
-            {
-                <fieldset>
+    <article class="controls-container">
+        <nav>
+            <ul>
+
+            <li><a aria-current=@(CurrentTab == Tabs.Tileset) @onclick="@(() => CurrentTab = Tabs.Tileset)">Tileset</a></li>
+            <li><a aria-current=@(CurrentTab == Tabs.Properties) @onclick="@(() => CurrentTab = Tabs.Properties)">Properties</a></li>
+            <li><a aria-current=@(CurrentTab == Tabs.Tile) @onclick="@(() => CurrentTab = Tabs.Tile)">Tile</a></li>
+            <li><a aria-current=@(CurrentTab == Tabs.Output) @onclick="@(() => CurrentTab = Tabs.Output)">Output</a></li>
+            </ul>
+        </nav>
+        @if (CurrentTab == Tabs.Tileset)
+        {
+            <form>
+
+                <fieldset class="grid">
                     <label>
-                        Tile Width
+                        Tile width
                         <input type="number" @onclick="ApplyGrid" @bind="TileWidth" />
                     </label>
                     <label>
-                        Tile Height
+                        Tile height
                         <input type="number" @onclick="ApplyGrid" @bind="TileHeight" />
                     </label>
+                </fieldset>
+
+                <fieldset class="grid">
                     <label>
-                        Tile Gap Width
+                        Tile gap width
                         <input type="number" @onclick="ApplyGrid" @bind="TileGapWidth" />
                     </label>
                     <label>
-                        Tile Gap Height
+                        Tile gap height
                         <input type="number" @onclick="ApplyGrid" @bind="TileGapHeight" />
                     </label>
+                </fieldset>
+                <fieldset class="grid">
+                    <label>
+                        <input type="checkbox" role="switch" />
+                        Link size
+                    </label>
+                    <label>
+                        <input type="checkbox" role="switch" />
+                        Link gap size
+                    </label>
+                </fieldset>
+                <hr />
+                <fieldset class="grid">
                     <label>
                         Grid Color
                         <input type="color" @bind="GridColor" />
@@ -88,8 +109,12 @@
                 </fieldset>
 
                 <InputFile OnChange="LoadFile" />
-            }
-            @if (CurrentTab == Tabs.Properties)
+
+            </form>
+        }
+        @if (CurrentTab == Tabs.Properties)
+        {
+            @if (GlobalProperties.Count > 0)
             {
                 <ul>
                     @foreach (var name in GlobalProperties)
@@ -100,105 +125,129 @@
                         </li>
                     }
                 </ul>
-
+            }
+            else
+            {
+                <div>
+                    No properties yet
+                </div>
+            }
+            <hr />
+            var isAdding = string.IsNullOrWhiteSpace(OldGlobalProperty);
+            <fieldset>
+                <label>
+                    @if (isAdding)
+                    {
+                        @:New property name
+                    }
+                    else
+                    {
+                        @:Property name
+                    }
+                    <input type="string" @bind="GlobalProperty" />
+                </label>
+                <label>
+                    @if (isAdding)
+                    {
+                        @:New property type
+                    }
+                    else
+                    {
+                        @:Property type
+                    }
+                    <select @bind="GlobalPropertyType">
+                        <option selected>
+                            string
+                        </option>
+                        <option>
+                            bool
+                        </option>
+                        <option>
+                            int
+                        </option>
+                        <option>
+                            float
+                        </option>
+                    </select>
+                </label>
+            </fieldset>
+            <button @onclick="AddGlobalProperty">@(isAdding ? "Add" : "Edit") property</button>
+        }
+        @if (CurrentTab == Tabs.Tile)
+        {
+            @if (SelectedTile is not null)
+            {
                 <h6>
-                    New global property:
+                    (@SelectedTile.Col, @SelectedTile.Row)
                 </h6>
-                <fieldset>
-                    <label>
-                        Global property name
-                        <input type="string" @bind="GlobalProperty" />
-                    </label>
-                    <label>
-                        Global property type
-                        <select @bind="GlobalPropertyType">
-                            <option selected>
-                                string
-                            </option>
-                            <option>
-                                bool
-                            </option>
-                            <option>
-                                int
-                            </option>
-                            <option>
-                                float
-                            </option>
-                        </select>
-                    </label>
-                </fieldset>
-                <button @onclick="AddGlobalProperty">Save global property</button>
-            }
-            @if (CurrentTab == Tabs.Tile)
-            {
-                @if (SelectedTile is not null)
-                {
-                    <h6>
-                        (@SelectedTile.Col, @SelectedTile.Row)
-                    </h6>
-                    <div class="tile-properties-container">
+                <EditForm Model="SelectedTile" class="tile-properties-container">
 
+                    <fieldset>
+                        <label>
+                            Name
+                            <InputText type="string" @onfocusout="ExportToJson" @bind-Value="SelectedTile.Name" />
+                        </label>
+                        <label>
+                            Id
+                            <InputText type="string" @onfocusout="ExportToJson" @bind-Value="SelectedTile.Id" />
+                        </label>
+                    </fieldset>
+
+                    <h3>Properties</h3>
+
+                    @if (SelectedTile.PropertyTypes is not null)
+                    {
                         <fieldset>
-                            <label>
-                                Name
-                                <input type="string" @onfocusout="ExportToJson" @bind="SelectedTile.Name" />
-                            </label>
-                            <label>
-                                Id
-                                <input type="string" @bind="SelectedTile.Id" />
-                            </label>
-                        </fieldset>
+                            @foreach (var (name, type) in SelectedTile.PropertyTypes)
+                            {
+                                var n = name;
+                                var t = type;
 
-                        <h3>Properties</h3>
-
-                        @if (SelectedTile.Properties is not null)
-                        {
-                            <fieldset>
-                                @foreach (var (name, property) in SelectedTile.Properties)
-                                {
-                                    if (property is null)
+                                <label>
+                                    @if (t == "string")
                                     {
-                                        continue;
-                                    }
-                                    var n = name;
-                                    var v = property.Value.Value;
-                                    var t = property.Value.Type;
-
-                                    <label>
                                         @n
-                                        @if (t == "string")
-                                        {
-                                            <input @onchange="@(e => SelectedTile.Properties[n] = (e.Value, t))" @onfocusout="ExportToJson" />
-                                        }
-                                        else if (t == "bool")
-                                        {
-                                            <input type="checkbox" @onchange="@(e => SelectedTile.Properties[n] = (e.Value, t))" @onfocusout="ExportToJson" />
-                                        }
-                                        else if (t == "int")
-                                        {
-                                            <input type="number" step="1" @onchange="@(e => SelectedTile.Properties[n] = (e.Value, t))" @onfocusout="ExportToJson" />
-                                        }else if (t == "float")
-                                        {
-                                            <input type="number" step="any" @onchange="@(e => SelectedTile.Properties[n] = (e.Value, t))" @onfocusout="ExportToJson" />
-                                        }
-                                    </label>
-                                }
-                            </fieldset>
-                        }
-                    </div>
-                }
+                                        <InputText @bind-Value="@SelectedTile.StringValues[n]" @onfocusout="ExportToJson" />
+                                    }
+                                    else if (t == "bool")
+                                    {
+                                        <InputCheckbox @bind-Value="@SelectedTile.BoolValues[n]" @onfocusout="ExportToJson" />
+                                        @n
+                                    }
+                                    else if (t == "int")
+                                    {
+                                        @n
+                                        <InputNumber @bind-Value="@SelectedTile.IntValues[n]" step="1" @onfocusout="ExportToJson" />
+                                    }
+                                    else if (t == "float")
+                                    {
+                                        @n
+                                        <InputNumber @bind-Value="@SelectedTile.FloatValues[n]" step="any" @onfocusout="ExportToJson" />
+                                    }
+                                </label>
+                            }
+                        </fieldset>
+                    }
+                </EditForm>
             }
-            @if (CurrentTab == Tabs.Output)
+            else
             {
-                <pre>
-                    <code>
-                        @Output
-                    </code>
-                </pre>
-                <button @onclick="CopyToClipboard">Copy to Clipboard</button>
-            }        
-        </footer>
-    </aside>
+                <h4>
+                    Select a tile first
+                </h4>
+            }
+        }
+        @if (CurrentTab == Tabs.Output)
+        {
+            <pre>
+            <code>
+                    @Output
+                            </code>
+                        </pre>
+            <button @onclick="CopyToClipboard">Copy to Clipboard</button>
+        }
+    </article>
+</main>
 
 
 

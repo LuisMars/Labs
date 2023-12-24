@@ -124,6 +124,7 @@ html, body {
     background-repeat: no-repeat;
     image-rendering: pixelated;
 }
+
     .tileset .tile {
         pointer-events: all;
         cursor: pointer;
@@ -133,25 +134,25 @@ html, body {
         border: 0.1px solid;
     }
 
-    .tile.selected,
-    .tile:hover {
-        border: 1px solid;
-        box-shadow: 0 0 0 var(--pico-outline-width) var(--pico-form-element-focus-color);
-    }
+.tile.selected,
+.tile:hover {
+    border: 1px solid;
+    box-shadow: 0 0 0 var(--pico-outline-width) var(--pico-form-element-focus-color);
+}
 
-    .tile .tile-used {
-        position: absolute;
-        background-color: var(--pico-background-color);
-        background-image: var(--pico-icon-valid);
-        background-position: center;
-        background-size: 75%;
-        border: var(--pico-border-width) solid var(--pico-form-element-border-color);
-        bottom: 0;
-        right: 0;
-        width: max(0.75rem, 20%);
-        aspect-ratio: 1;
-        border-radius: 100%;
-    }
+.tile .tile-used {
+    position: absolute;
+    background-color: var(--pico-background-color);
+    background-image: var(--pico-icon-valid);
+    background-position: center;
+    background-size: 75%;
+    border: var(--pico-border-width) solid var(--pico-form-element-border-color);
+    bottom: 0;
+    right: 0;
+    width: max(0.75rem, 20%);
+    aspect-ratio: 1;
+    border-radius: 100%;
+}
 
 .controls-container {
     grid-column: 2;
@@ -165,13 +166,24 @@ html, body {
     max-height: 100svh;
     overflow-y: auto;
     overflow-x: hidden;
+    width: 100%;
 }
+    .controls-container nav ul {
+        display: flex;
+        width: 100%;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    .controls-container nav ul li {
+        padding: 0;
+    }
 
-fieldset {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-}
+        fieldset {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
 
 .tool-container li {
     cursor: pointer;
