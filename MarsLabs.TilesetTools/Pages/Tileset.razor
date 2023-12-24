@@ -14,12 +14,11 @@
                     grid-template-columns: repeat(@NumCols, 1fr);
                     aspect-ratio: @ImageWidth / @ImageHeight;
                     width: calc(100% * @ImageWidth / @ImageHeight);
-                    gap: @(((float)ImageWidth / ImageHeight) * TileGapHeight)px @(((float)ImageWidth / ImageHeight) * TileGapWidth)px;
+                    gap: @(((float)ImageWidth / ImageHeight) * TilesetProperties.TileGapHeight)px @(((float)ImageWidth / ImageHeight) * TilesetProperties.TileGapWidth)px;
                 }
 
-
                     .tileset .tile {
-                        border-color: @GridColor@(GridColorAlpha.ToString("X2"));
+                        border-color: @TilesetProperties.GridColor@(TilesetProperties.GridColorAlpha.ToString("X2"));
                     }
 
             </style>
@@ -46,7 +45,9 @@
         else
         {
             <div>
-                <InputFile OnChange="LoadFile" />
+                <h2>
+                    Import a tileset
+                </h2>
             </div>
         }
     </section>
@@ -55,69 +56,76 @@
         <nav>
             <ul>
 
-            <li><a aria-current=@(CurrentTab == Tabs.Tileset) @onclick="@(() => CurrentTab = Tabs.Tileset)">Tileset</a></li>
-            <li><a aria-current=@(CurrentTab == Tabs.Properties) @onclick="@(() => CurrentTab = Tabs.Properties)">Properties</a></li>
-            <li><a aria-current=@(CurrentTab == Tabs.Tile) @onclick="@(() => CurrentTab = Tabs.Tile)">Tile</a></li>
-            <li><a aria-current=@(CurrentTab == Tabs.Output) @onclick="@(() => CurrentTab = Tabs.Output)">Output</a></li>
+                <li><a aria-current=@(CurrentTab == Tabs.Import) @onclick="@(() => CurrentTab = Tabs.Import)">Import</a></li>
+                <li><a aria-current=@(CurrentTab == Tabs.Tileset) @onclick="@(() => CurrentTab = Tabs.Tileset)">Tileset</a></li>
+                <li><a aria-current=@(CurrentTab == Tabs.Properties) @onclick="@(() => CurrentTab = Tabs.Properties)">Properties</a></li>
+                <li><a aria-current=@(CurrentTab == Tabs.Tile) @onclick="@(() => CurrentTab = Tabs.Tile)">Tile</a></li>
+                <li><a aria-current=@(CurrentTab == Tabs.Export) @onclick="@(() => CurrentTab = Tabs.Export)">Export</a></li>
             </ul>
         </nav>
+        @if (CurrentTab == Tabs.Import)
+        {
+            <label>
+                Load image
+                <InputFile OnChange="LoadImage" />
+            </label>
+            <label>
+                Load save file
+                <InputFile OnChange="LoadSaveFile" />
+            </label>
+        }
         @if (CurrentTab == Tabs.Tileset)
         {
-            <form>
-
+            <EditForm Model="TilesetProperties">
                 <fieldset class="grid">
                     <label>
                         Tile width
-                        <input type="number" @onclick="ApplyGrid" @bind="TileWidth" />
+                        <InputNumber @onfocusout="ApplyGrid" @bind-Value="TilesetProperties.TileWidth" />
                     </label>
                     <label>
                         Tile height
-                        <input type="number" @onclick="ApplyGrid" @bind="TileHeight" />
+                        <InputNumber @onfocusout="ApplyGrid" @bind-Value="TilesetProperties.TileHeight" />
                     </label>
                 </fieldset>
+                <label>
+                    <input type="checkbox" role="switch" />
+                    Link size
+                </label>
 
+                <hr />
                 <fieldset class="grid">
                     <label>
                         Tile gap width
-                        <input type="number" @onclick="ApplyGrid" @bind="TileGapWidth" />
+                        <InputNumber @onfocusout="ApplyGrid" @bind-Value="TilesetProperties.TileGapWidth" />
                     </label>
                     <label>
                         Tile gap height
-                        <input type="number" @onclick="ApplyGrid" @bind="TileGapHeight" />
+                        <InputNumber @onfocusout="ApplyGrid" @bind-Value="TilesetProperties.TileGapHeight" />
                     </label>
                 </fieldset>
-                <fieldset class="grid">
-                    <label>
-                        <input type="checkbox" role="switch" />
-                        Link size
-                    </label>
-                    <label>
-                        <input type="checkbox" role="switch" />
-                        Link gap size
-                    </label>
-                </fieldset>
+                <label>
+                    <input type="checkbox" role="switch" />
+                    Link gap size
+                </label>
                 <hr />
                 <fieldset class="grid">
                     <label>
                         Grid Color
-                        <input type="color" @bind="GridColor" />
+                        <input type="color" @onfocusout="GenerateJsonOutput" @bind="TilesetProperties.GridColor" />
                     </label>
                     <label>
                         Grid Alpha
-                        <input type="range" min="0" max="255" @bind="GridColorAlpha" />
+                        <input type="range" min="0" max="255" @onfocusout="GenerateJsonOutput" @bind="TilesetProperties.GridColorAlpha" />
                     </label>
                 </fieldset>
-
-                <InputFile OnChange="LoadFile" />
-
-            </form>
+            </EditForm>
         }
         @if (CurrentTab == Tabs.Properties)
         {
-            @if (GlobalProperties.Count > 0)
+            @if (TilesetProperties.GlobalProperties.Count > 0)
             {
                 <ul>
-                    @foreach (var name in GlobalProperties)
+                    @foreach (var name in TilesetProperties.GlobalProperties)
                     {
                         var n = name;
                         <li @onclick=@(() => { GlobalProperty = n.Name; OldGlobalProperty = n.Name; GlobalPropertyType = n.Type; OldGlobalPropertyType = n.Type; })>
@@ -185,11 +193,11 @@
                     <fieldset>
                         <label>
                             Name
-                            <InputText type="string" @onfocusout="ExportToJson" @bind-Value="SelectedTile.Name" />
+                            <InputText type="string" @onfocusout="GenerateJsonOutput" @bind-Value="SelectedTile.Name" />
                         </label>
                         <label>
                             Id
-                            <InputText type="string" @onfocusout="ExportToJson" @bind-Value="SelectedTile.Id" />
+                            <InputText type="string" @onfocusout="GenerateJsonOutput" @bind-Value="SelectedTile.Id" />
                         </label>
                     </fieldset>
 
@@ -207,22 +215,22 @@
                                     @if (t == "string")
                                     {
                                         @n
-                                        <InputText @bind-Value="@SelectedTile.StringValues[n]" @onfocusout="ExportToJson" />
+                                        <InputText @bind-Value="@SelectedTile.StringValues[n]" @onfocusout="GenerateJsonOutput" />
                                     }
                                     else if (t == "bool")
                                     {
-                                        <InputCheckbox @bind-Value="@SelectedTile.BoolValues[n]" @onfocusout="ExportToJson" />
+                                        <InputCheckbox @bind-Value="@SelectedTile.BoolValues[n]" @onfocusout="GenerateJsonOutput" />
                                         @n
                                     }
                                     else if (t == "int")
                                     {
                                         @n
-                                        <InputNumber @bind-Value="@SelectedTile.IntValues[n]" step="1" @onfocusout="ExportToJson" />
+                                        <InputNumber @bind-Value="@SelectedTile.IntValues[n]" step="1" @onfocusout="GenerateJsonOutput" />
                                     }
                                     else if (t == "float")
                                     {
                                         @n
-                                        <InputNumber @bind-Value="@SelectedTile.FloatValues[n]" step="any" @onfocusout="ExportToJson" />
+                                        <InputNumber @bind-Value="@SelectedTile.FloatValues[n]" step="any" @onfocusout="GenerateJsonOutput" />
                                     }
                                 </label>
                             }
@@ -237,14 +245,14 @@
                 </h4>
             }
         }
-        @if (CurrentTab == Tabs.Output)
+        @if (CurrentTab == Tabs.Export)
         {
             <pre>
             <code>
                     @Output
-                            </code>
-                        </pre>
-            <button @onclick="CopyToClipboard">Copy to Clipboard</button>
+                    </code>
+                </pre>
+            <button @onclick="SaveFile">Save to file</button>
         }
     </article>
 </main>

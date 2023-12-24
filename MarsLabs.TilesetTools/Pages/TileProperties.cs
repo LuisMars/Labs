@@ -1,86 +1,80 @@
-﻿using static MarsLabs.TilesetTools.Pages.Tileset;
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 using System.Text.Json;
-using System.Globalization;
 
 namespace MarsLabs.TilesetTools.Pages;
-public partial class Tileset
-{
-    // Represents properties for each tile that you might want to edit
-    public class TileProperties
-    {
-        public int Row { get; set; }
-        public int Col { get; set; }
-        public string Name { get; set; }
-        public string Id { get; set; }
-        public Dictionary<string, string> StringValues { get; set; } = [];
-        public Dictionary<string, bool> BoolValues { get; set; } = [];
-        public Dictionary<string, int> IntValues { get; set; } = [];
-        public Dictionary<string, float> FloatValues { get; set; } = [];
-        public Dictionary<string, string> PropertyTypes { get; set; } = [];
 
-        internal bool HasContent
-        {
-            get
-            {
-                return 
-                    !string.IsNullOrWhiteSpace(Name) || 
-                    !string.IsNullOrWhiteSpace(Id) || 
-                    StringValues?.Count(p => p.Value is not null) > 0 ||
-                    BoolValues?.Count(p => p.Value != default) > 0 ||
-                    FloatValues?.Count(p => p.Value != default) > 0 ||
-                    IntValues?.Count(p => p.Value != default) > 0
-                    ;
-            }
-        }
+public class TilesetProperties
+{
+
+    public int TileWidth { get; set; } = 16;
+    public int TileHeight { get; set; } = 16;
+    public int TileGapWidth { get; set; } = 1;
+    public int TileGapHeight { get; set; } = 1;
+    public int GridColorAlpha { get; set; } = 128;
+    public string GridColor { get; set; } = "#808080";
+    public string ImageFile { get; internal set; }
+    public HashSet<PropertyDefinition> GlobalProperties { get; set; } = [];
+    public IEnumerable<TileProperties> Tiles { get; set; }
+}
+
+public class PropertyDefinition(string Name, string Type) : IEquatable<PropertyDefinition?>
+{
+    public string Name { get; set; } = Name;
+    public string Type { get; set; } = Type;
+    public override bool Equals(object? obj)
+    {
+        return Equals(obj as PropertyDefinition);
+    }
+
+    public bool Equals(PropertyDefinition? other)
+    {
+        return other is not null &&
+               Name == other.Name &&
+               Type == other.Type;
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(Name, Type);
+    }
+
+    public static bool operator ==(PropertyDefinition? left, PropertyDefinition? right)
+    {
+        return EqualityComparer<PropertyDefinition>.Default.Equals(left, right);
+    }
+
+    public static bool operator !=(PropertyDefinition? left, PropertyDefinition? right)
+    {
+        return !(left == right);
     }
 }
 
-public static class TypeExtensions
+// Represents properties for each tile that you might want to edit
+public class TileProperties
 {
-    public static float GetFloat(this object value)
-    {
-        if (value is float floatValue)
-        {
-            return floatValue;
-        }
-        else if (value is string stringfloatValue && float.TryParse(stringfloatValue, CultureInfo.InvariantCulture, out var parsedfloatValue))
-        {
-            return parsedfloatValue;
-        }
-        return 0;
-    }
+    public int Row { get; set; }
+    public int Col { get; set; }
+    public string Name { get; set; }
+    public string Id { get; set; }
+    public Dictionary<string, string> StringValues { get; set; } = [];
+    public Dictionary<string, bool> BoolValues { get; set; } = [];
+    public Dictionary<string, int> IntValues { get; set; } = [];
+    public Dictionary<string, float> FloatValues { get; set; } = [];
+    public Dictionary<string, string> PropertyTypes { get; set; } = [];
 
-    public static int GetInt(this object value)
+    internal bool HasContent
     {
-        if (value is int intValue)
+        get
         {
-            return intValue;
+            return
+                !string.IsNullOrWhiteSpace(Name) ||
+                !string.IsNullOrWhiteSpace(Id) ||
+                StringValues?.Count(p => p.Value is not null) > 0 ||
+                BoolValues?.Count(p => p.Value != default) > 0 ||
+                FloatValues?.Count(p => p.Value != default) > 0 ||
+                IntValues?.Count(p => p.Value != default) > 0
+                ;
         }
-        else if (value is string stringIntValue && int.TryParse(stringIntValue, CultureInfo.InvariantCulture, out var parsedIntValue))
-        {
-            return parsedIntValue;
-        }
-        return 0;
-    }
-
-    public static bool GetBool(this object value)
-    {
-        var boolenValue = false;
-        if (value is bool b)
-        {
-            return b;
-        }
-        return boolenValue;
-    }
-
-    public static string GetString(this object value)
-    {
-        if (value is string s)
-        {
-            return s;
-        }
-        return value?.ToString() ?? "";
     }
 }
 
@@ -89,7 +83,6 @@ public class TilePropertiesConverter : JsonConverter<TileProperties>
     public override TileProperties Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         var tileProperties = new TileProperties();
-        //tileProperties.Properties = new Dictionary<string, ValueTypeTuple>();
 
         while (reader.Read())
         {
@@ -101,25 +94,28 @@ public class TilePropertiesConverter : JsonConverter<TileProperties>
             // Assume property name is known and valid.
             var propName = reader.GetString();
             reader.Read();
-
+            if (propName is null)
+            {
+                continue;
+            }
             // Custom logic to handle different types, you might need to adjust based on actual type logic.
-            if (propName == "Row" || propName == "Col")
+            switch (propName)
             {
-                var intValue = reader.GetInt32();
-                tileProperties.GetType().GetProperty(propName).SetValue(tileProperties, intValue);
-            }
-            else if (propName == "Name" || propName == "Id")
-            {
-                var stringValue = reader.GetString();
-                tileProperties.GetType().GetProperty(propName).SetValue(tileProperties, stringValue);
-            }
-            else // Handle properties
-            {
-                // You need to implement logic to deserialize and cast based on the 'Type' value.
-                // This is a simplistic approach; you'll need to handle actual types and errors.
-                var value = reader.GetString(); // Or use appropriate method to get the value based on type
-                var type = "String"; // Replace with actual logic to get the type.
-                //tileProperties.Properties[propName] = (value, type);
+                case "Row":
+                    tileProperties.Row = reader.GetInt32();
+                    break;
+                case "Col":
+                    tileProperties.Col = reader.GetInt32();
+                    break;
+                case "Name":
+                    tileProperties.Name = reader.GetString() ?? "";
+                    break;
+                case "Id":
+                    tileProperties.Id = reader.GetString() ?? "";
+                    break;
+                default:
+                    tileProperties.StringValues[propName] = reader.GetString() ?? "";
+                    break;
             }
         }
 

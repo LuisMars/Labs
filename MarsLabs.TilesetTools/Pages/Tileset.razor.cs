@@ -8,21 +8,15 @@ public partial class Tileset
 {
     [Inject]
     public IJSRuntime JsRuntime { get; set; }
-    private string? ImageSrc { get; set; }
-    private string? ImageData { get; set; }
-    private int TileWidth { get; set; } = 16; 
-    private int TileHeight { get; set; } = 16;
-    private int TileGapWidth { get; set; } = 1;
-    private int TileGapHeight { get; set; } = 1;
-   
+    public string? ImageData { get; set; }
+    public string? ImageSrc { get; set; }
     private int NumRows { get; set; }
     private int NumCols { get; set; }
     private int ImageHeight { get; set; }
     private int ImageWidth { get; set; }
-    private int GridColorAlpha { get; set; } = 128;
-    private string GridColor { get; set; } = "#808080";
     private Dictionary<(int X, int Y), TileProperties> Tiles { get; set; } = [];
     private TileProperties? SelectedTile { get; set; }
+    private TilesetProperties TilesetProperties { get; set; } = new TilesetProperties();
     private string CustomPropertyName { get; set; } = "";
     private string CustomPropertyValue { get; set; } = "";
     private string Output { get; set; } = "";
@@ -32,7 +26,6 @@ public partial class Tileset
     private bool IsPanel1Open { get; set; }
     private bool IsPanel2Open { get; set; }
     private bool IsPanel3Open { get; set; }
-    private HashSet<(string Name, string Type)> GlobalProperties { get; set; } = [];
     private string OldGlobalProperty { get; set; } = "";
     private string OldGlobalPropertyType { get; set; } = "";
     private string GlobalProperty { get; set; } = "";
@@ -43,14 +36,16 @@ public partial class Tileset
         Tileset,
         Properties,
         Tile,
-        Output
+        Import,
+        Export
     }
 
-    private async Task LoadFile(InputFileChangeEventArgs e)
+    private async Task LoadImage(InputFileChangeEventArgs e)
     {
         var imageFile = e.File;
         if (imageFile != null)
         {
+            TilesetProperties.ImageFile = e.File.Name;
             var format = "image/png"; // or determine from file
             var buffer = new byte[imageFile.Size];
             await imageFile.OpenReadStream().ReadAsync(buffer);
@@ -61,6 +56,13 @@ public partial class Tileset
             ApplyGrid();
         }
     }
+    private async Task LoadSaveFile(InputFileChangeEventArgs e)
+    {
+        using var fileStream = e.File.OpenReadStream();
+        TilesetProperties = await JsonSerializer.DeserializeAsync<TilesetProperties>(fileStream);
+
+    }
+
     private async Task GetImageDimensions()
     {
         var dimensions = await JsRuntime.InvokeAsync<int[]>("getImageDimensions", ImageSrc);
@@ -71,9 +73,9 @@ public partial class Tileset
     private void ApplyGrid()
     {
         // Assuming image dimensions are accessible via some variables like imageWidth and imageHeight
-        NumRows = (int)Math.Ceiling((float)ImageHeight / (TileHeight + TileGapHeight));
-        NumCols = (int)Math.Ceiling((float)ImageWidth / (TileWidth + TileGapHeight));
-
+        NumRows = (int)Math.Ceiling((float)ImageHeight / (TilesetProperties.TileHeight + TilesetProperties.TileGapHeight));
+        NumCols = (int)Math.Ceiling((float)ImageWidth / (TilesetProperties.TileWidth + TilesetProperties.TileGapHeight));
+        GenerateJsonOutput();
     }
 
     private void EditTile(int row, int col)
@@ -97,22 +99,25 @@ public partial class Tileset
             return;
         }
 
-        if (!string.IsNullOrEmpty(OldGlobalProperty) || GlobalProperties.Any(c => c.Name == GlobalProperty))
+        if (!string.IsNullOrEmpty(OldGlobalProperty) || TilesetProperties.GlobalProperties.Any(c => c.Name == GlobalProperty))
         {
-            GlobalProperties.RemoveWhere(p => p.Name == OldGlobalProperty);
-            GlobalProperties.RemoveWhere(p => p.Name == GlobalProperty);
-            GlobalProperties.Add((GlobalProperty, GlobalPropertyType));
+            TilesetProperties.GlobalProperties.RemoveWhere(p => p.Name == OldGlobalProperty);
+            TilesetProperties.GlobalProperties.RemoveWhere(p => p.Name == GlobalProperty);
+            TilesetProperties.GlobalProperties.Add(new (GlobalProperty, GlobalPropertyType));
             RenameGlobalProperties(OldGlobalProperty, GlobalProperty);
             GlobalProperty = "";
             OldGlobalProperty = "";
             AddGlobalProperties();
-            StateHasChanged();
+            StateHasChanged(); 
+            GenerateJsonOutput();
+
             return;
         }
-        GlobalProperties.Add((GlobalProperty, GlobalPropertyType));
+        TilesetProperties.GlobalProperties.Add(new (GlobalProperty, GlobalPropertyType));
         GlobalProperty = "";
         OldGlobalProperty = "";
         AddGlobalProperties();
+        GenerateJsonOutput();
         StateHasChanged();
     }
 
@@ -120,7 +125,7 @@ public partial class Tileset
     {
         foreach (var item in Tiles)
         {
-            foreach (var property in GlobalProperties)
+            foreach (var property in TilesetProperties.GlobalProperties)
             {
                 SetProperty(item.Value, property.Name, property.Type);
             }
@@ -185,20 +190,26 @@ public partial class Tileset
         }
     }
 
-    private void ExportToJson()
+    private void GenerateJsonOutput()
     {
         var properties = Tiles.Where(t => t.Value.HasContent).Select(t => t.Value);
-        Output = JsonSerializer.Serialize(properties, new JsonSerializerOptions
+        TilesetProperties.Tiles = properties;
+        Output = JsonSerializer.Serialize(TilesetProperties, new JsonSerializerOptions
         {
             WriteIndented = true,
             DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-            Converters = { new TilePropertiesConverter() }
+            Converters = { new TilePropertiesConverter() },
+            IncludeFields = true,
         });
     }
     // This method is triggered when the button is clicked
-    private async Task CopyToClipboard()
+    private async Task SaveFile()
     {
+        GenerateJsonOutput();
         await JsRuntime.InvokeVoidAsync("navigator.clipboard.writeText", Output);
+
+        byte[] file = System.Text.Encoding.UTF8.GetBytes(Output);
+        await JsRuntime.InvokeVoidAsync("downloadFile", $"{TilesetProperties.ImageFile}.json", "text/json", file);
     }
 }
 
