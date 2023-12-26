@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
+using System;
 using System.Text.Json;
 
 namespace MarsLabs.TilesetTools.Pages;
@@ -30,7 +31,8 @@ public partial class Tileset
     private string OldGlobalPropertyType { get; set; } = "";
     private string GlobalProperty { get; set; } = "";
     private string GlobalPropertyType { get; set; } = "string";
-    private Tabs CurrentTab { get; set; } = Tabs.Tileset;
+    private Tabs CurrentTab { get; set; } = Tabs.Import;
+    public bool LargeSidebar { get; set; }
     public enum Tabs
     {
         Tileset,
@@ -59,8 +61,20 @@ public partial class Tileset
     private async Task LoadSaveFile(InputFileChangeEventArgs e)
     {
         using var fileStream = e.File.OpenReadStream();
-        TilesetProperties = await JsonSerializer.DeserializeAsync<TilesetProperties>(fileStream);
+        TilesetProperties = await JsonSerializer.DeserializeAsync<TilesetProperties>(
+            fileStream,
+            new JsonSerializerOptions
+            {
+                Converters = { new TilePropertiesConverter() },
 
+            });
+        Tiles = TilesetProperties.Tiles.ToDictionary(t => (t.Col, t.Row), t => t);
+        if (SelectedTile is not null)
+        {
+            EditTile(SelectedTile.Col, SelectedTile.Row);
+        }
+        ApplyGrid();
+        StateHasChanged(); 
     }
 
     private async Task GetImageDimensions()
@@ -72,13 +86,50 @@ public partial class Tileset
 
     private void ApplyGrid()
     {
+        if (TilesetProperties.LinkTileSize)
+        {
+            TilesetProperties.TileHeight = TilesetProperties.TileWidth;
+        }
+
+        if (TilesetProperties.LinkTileGapSize)
+        {
+            TilesetProperties.TileGapHeight = TilesetProperties.TileGapWidth;
+        }
+
         // Assuming image dimensions are accessible via some variables like imageWidth and imageHeight
         NumRows = (int)Math.Ceiling((float)ImageHeight / (TilesetProperties.TileHeight + TilesetProperties.TileGapHeight));
         NumCols = (int)Math.Ceiling((float)ImageWidth / (TilesetProperties.TileWidth + TilesetProperties.TileGapHeight));
         GenerateJsonOutput();
     }
 
-    private void EditTile(int row, int col)
+    private void ChangeTile(int direction)
+    {
+        var col = SelectedTile.Col + direction;
+        var row = SelectedTile.Row;
+        if (col >= NumCols)
+        {
+            row++;
+            col = 0;
+        }
+        else if (col < 0)
+        {
+            row--;
+            col = NumCols - 1;
+        }
+        if (row >= NumRows)
+        {
+            row = 0;
+            col = 0;
+        }
+        else if (row < 0)
+        {
+            row = NumRows - 1;
+            col = NumCols - 1;
+        }
+        EditTile(col, row);
+    }
+
+    private void EditTile(int col, int row)
     {
         if (!Tiles.TryGetValue((col, row), out var tile))
         {
@@ -99,21 +150,21 @@ public partial class Tileset
             return;
         }
 
-        if (!string.IsNullOrEmpty(OldGlobalProperty) || TilesetProperties.GlobalProperties.Any(c => c.Name == GlobalProperty))
+        if (!string.IsNullOrEmpty(OldGlobalProperty) || TilesetProperties.Properties.Any(c => c.Name == GlobalProperty))
         {
-            TilesetProperties.GlobalProperties.RemoveWhere(p => p.Name == OldGlobalProperty);
-            TilesetProperties.GlobalProperties.RemoveWhere(p => p.Name == GlobalProperty);
-            TilesetProperties.GlobalProperties.Add(new (GlobalProperty, GlobalPropertyType));
+            TilesetProperties.Properties.RemoveWhere(p => p.Name == OldGlobalProperty);
+            TilesetProperties.Properties.RemoveWhere(p => p.Name == GlobalProperty);
+            TilesetProperties.Properties.Add(new(GlobalProperty, GlobalPropertyType));
             RenameGlobalProperties(OldGlobalProperty, GlobalProperty);
             GlobalProperty = "";
             OldGlobalProperty = "";
             AddGlobalProperties();
-            StateHasChanged(); 
+            StateHasChanged();
             GenerateJsonOutput();
 
             return;
         }
-        TilesetProperties.GlobalProperties.Add(new (GlobalProperty, GlobalPropertyType));
+        TilesetProperties.Properties.Add(new(GlobalProperty, GlobalPropertyType));
         GlobalProperty = "";
         OldGlobalProperty = "";
         AddGlobalProperties();
@@ -125,7 +176,7 @@ public partial class Tileset
     {
         foreach (var item in Tiles)
         {
-            foreach (var property in TilesetProperties.GlobalProperties)
+            foreach (var property in TilesetProperties.Properties)
             {
                 SetProperty(item.Value, property.Name, property.Type);
             }
@@ -158,7 +209,7 @@ public partial class Tileset
             }
 
             if (item.Value.PropertyTypes.TryGetValue(oldName, out var oldType))
-            {                      
+            {
                 item.Value.PropertyTypes[newName] = oldType;
                 item.Value.PropertyTypes.Remove(oldName);
             }

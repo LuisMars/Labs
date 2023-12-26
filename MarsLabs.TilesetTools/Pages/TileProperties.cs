@@ -8,13 +8,16 @@ public class TilesetProperties
 
     public int TileWidth { get; set; } = 16;
     public int TileHeight { get; set; } = 16;
-    public int TileGapWidth { get; set; } = 1;
-    public int TileGapHeight { get; set; } = 1;
+    public bool LinkTileSize { get; set; } = true;
+    public int TileGapWidth { get; set; } = 0;
+    public int TileGapHeight { get; set; } = 0;
+    public bool LinkTileGapSize { get; set; } = true;
     public int GridColorAlpha { get; set; } = 128;
     public string GridColor { get; set; } = "#808080";
-    public string ImageFile { get; internal set; }
-    public HashSet<PropertyDefinition> GlobalProperties { get; set; } = [];
-    public IEnumerable<TileProperties> Tiles { get; set; }
+    public string ImageFile { get; set; } = "";
+
+    public HashSet<PropertyDefinition> Properties { get; set; } = [];
+    public IEnumerable<TileProperties> Tiles { get; set; } = [];
 }
 
 public class PropertyDefinition(string Name, string Type) : IEquatable<PropertyDefinition?>
@@ -61,7 +64,7 @@ public class TileProperties
     public Dictionary<string, int> IntValues { get; set; } = [];
     public Dictionary<string, float> FloatValues { get; set; } = [];
     public Dictionary<string, string> PropertyTypes { get; set; } = [];
-
+    public string[] Tags { get; set; } = [];
     internal bool HasContent
     {
         get
@@ -113,6 +116,17 @@ public class TilePropertiesConverter : JsonConverter<TileProperties>
                 case "Id":
                     tileProperties.Id = reader.GetString() ?? "";
                     break;
+                case "Tags":
+                    var tags = new List<string>();
+                    while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+                    {
+                        if (reader.TokenType == JsonTokenType.String)
+                        {
+                            tags.Add(reader.GetString() ?? "");
+                        }
+                    }
+                    tileProperties.Tags = [.. tags];
+                    break;
                 default:
                     tileProperties.StringValues[propName] = reader.GetString() ?? "";
                     break;
@@ -137,6 +151,7 @@ public class TilePropertiesConverter : JsonConverter<TileProperties>
         {
             writer.WriteString("Id", value.Id);
         }
+
         // Flatten and write properties from the dictionary
         if (value.PropertyTypes != null)
         {
@@ -149,16 +164,16 @@ public class TilePropertiesConverter : JsonConverter<TileProperties>
                     switch (type)
                     {
                         case "int":
-                            writer.WriteNumber(type, value.IntValues[name]);
+                            writer.WriteNumber(name, value.IntValues[name]);
                             break;
                         case "float":
-                            writer.WriteNumber(type, value.FloatValues[name]);
+                            writer.WriteNumber(name, value.FloatValues[name]);
                             break;
                         case "string":
-                            writer.WriteString(type, value.StringValues[name]);
+                            writer.WriteString(name, value.StringValues[name]);
                             break;
                         case "bool":
-                            writer.WriteBoolean(type, value.BoolValues[name]);
+                            writer.WriteBoolean(name, value.BoolValues[name]);
                             break;
                         default:
                             // Possibly throw an exception or handle unknown types
@@ -171,7 +186,15 @@ public class TilePropertiesConverter : JsonConverter<TileProperties>
                 }
             }
         }
-
+        if (value.Tags != null && value.Tags.Length != 0)
+        {
+            writer.WriteStartArray("Tags");
+            foreach (var tag in value.Tags)
+            {
+                writer.WriteStringValue(tag);
+            }
+            writer.WriteEndArray();
+        }
         writer.WriteEndObject();
     }
 }

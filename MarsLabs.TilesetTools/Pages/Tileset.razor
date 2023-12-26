@@ -2,7 +2,7 @@
 @using System.IO
 @using System.Text.Json
 
-<main class="tool-container">
+<main class="tool-container @(LargeSidebar ? "large" : "")">
 
     <section class="tileset-container">
         @if (ImageData is not null)
@@ -32,7 +32,7 @@
                         var c = col;
                         var selected = SelectedTile?.Col == c && SelectedTile.Row == r;
                         var hasTile = Tiles.TryGetValue((c, r), out var tile);
-                        <div class="tile @(selected ? "selected" : "")" @onclick="() => EditTile(r, c)" data-tooltip="@($"({c}, {r}) - {tile?.Name ?? "unset"}")">
+                        <div class="tile @(selected ? "selected" : "")" @onclick="() => EditTile(c, r)" data-tooltip="@($"({c}, {r}) - {tile?.Name ?? "unset"}")">
                             @if (hasTile && tile!.HasContent)
                             {
                                 <span class="tile-used"></span>
@@ -53,16 +53,17 @@
     </section>
 
     <article class="controls-container">
-        <nav>
-            <ul>
-
-                <li><a aria-current=@(CurrentTab == Tabs.Import) @onclick="@(() => CurrentTab = Tabs.Import)">Import</a></li>
-                <li><a aria-current=@(CurrentTab == Tabs.Tileset) @onclick="@(() => CurrentTab = Tabs.Tileset)">Tileset</a></li>
-                <li><a aria-current=@(CurrentTab == Tabs.Properties) @onclick="@(() => CurrentTab = Tabs.Properties)">Properties</a></li>
-                <li><a aria-current=@(CurrentTab == Tabs.Tile) @onclick="@(() => CurrentTab = Tabs.Tile)">Tile</a></li>
-                <li><a aria-current=@(CurrentTab == Tabs.Export) @onclick="@(() => CurrentTab = Tabs.Export)">Export</a></li>
-            </ul>
-        </nav>
+        <header>
+            <nav>
+                <ul>
+                    <li><a aria-current=@(CurrentTab == Tabs.Import) @onclick="@(() => CurrentTab = Tabs.Import)">Import</a></li>
+                    <li><a aria-current=@(CurrentTab == Tabs.Tileset) @onclick="@(() => CurrentTab = Tabs.Tileset)">Tileset</a></li>
+                    <li><a aria-current=@(CurrentTab == Tabs.Properties) @onclick="@(() => CurrentTab = Tabs.Properties)">Properties</a></li>
+                    <li><a aria-current=@(CurrentTab == Tabs.Tile) @onclick="@(() => CurrentTab = Tabs.Tile)">Tile</a></li>
+                    <li><a aria-current=@(CurrentTab == Tabs.Export) @onclick="@(() => CurrentTab = Tabs.Export)">Export</a></li>
+                </ul>
+            </nav>
+        </header>
         @if (CurrentTab == Tabs.Import)
         {
             <label>
@@ -80,15 +81,15 @@
                 <fieldset class="grid">
                     <label>
                         Tile width
-                        <InputNumber @onfocusout="ApplyGrid" @bind-Value="TilesetProperties.TileWidth" />
+                        <InputNumber @onfocusout="ApplyGrid" @onclick="ApplyGrid" @bind-Value="TilesetProperties.TileWidth" />
                     </label>
                     <label>
                         Tile height
-                        <InputNumber @onfocusout="ApplyGrid" @bind-Value="TilesetProperties.TileHeight" />
+                        <InputNumber disabled=@TilesetProperties.LinkTileSize @onfocusout="ApplyGrid" @onclick="ApplyGrid" @bind-Value="TilesetProperties.TileHeight" />
                     </label>
                 </fieldset>
                 <label>
-                    <input type="checkbox" role="switch" />
+                    <input type="checkbox" role="switch" @bind="TilesetProperties.LinkTileSize" @onfocusout="GenerateJsonOutput" />
                     Link size
                 </label>
 
@@ -96,15 +97,15 @@
                 <fieldset class="grid">
                     <label>
                         Tile gap width
-                        <InputNumber @onfocusout="ApplyGrid" @bind-Value="TilesetProperties.TileGapWidth" />
+                        <InputNumber @onfocusout="ApplyGrid" @onclick="ApplyGrid" @bind-Value="TilesetProperties.TileGapWidth" />
                     </label>
                     <label>
                         Tile gap height
-                        <InputNumber @onfocusout="ApplyGrid" @bind-Value="TilesetProperties.TileGapHeight" />
+                        <InputNumber disabled=@TilesetProperties.LinkTileGapSize @onfocusout="ApplyGrid" @onclick="ApplyGrid" @bind-Value="TilesetProperties.TileGapHeight" />
                     </label>
                 </fieldset>
                 <label>
-                    <input type="checkbox" role="switch" />
+                    <input type="checkbox" role="switch" @bind="TilesetProperties.LinkTileGapSize" @onfocusout="GenerateJsonOutput" />
                     Link gap size
                 </label>
                 <hr />
@@ -122,10 +123,10 @@
         }
         @if (CurrentTab == Tabs.Properties)
         {
-            @if (TilesetProperties.GlobalProperties.Count > 0)
+            @if (TilesetProperties.Properties.Count > 0)
             {
                 <ul>
-                    @foreach (var name in TilesetProperties.GlobalProperties)
+                    @foreach (var name in TilesetProperties.Properties)
                     {
                         var n = name;
                         <li @onclick=@(() => { GlobalProperty = n.Name; OldGlobalProperty = n.Name; GlobalPropertyType = n.Type; OldGlobalPropertyType = n.Type; })>
@@ -175,6 +176,9 @@
                         </option>
                         <option>
                             float
+                        </option>
+                        <option>
+                            tag
                         </option>
                     </select>
                 </label>
@@ -230,13 +234,37 @@
                                     else if (t == "float")
                                     {
                                         @n
-                                        <InputNumber @bind-Value="@SelectedTile.FloatValues[n]" step="any" @onfocusout="GenerateJsonOutput" />
+                                        <InputNumber @bind-Value="@SelectedTile.FloatValues[n]" step="0.1" @onfocusout="GenerateJsonOutput" />
                                     }
+                                </label>
+                            }   
+                        </fieldset>
+                        <fieldset>
+                            @if (TilesetProperties.Properties.Any(p => p.Type == "tag")) 
+                            {
+                                <label>
+                                    Tags 
+                                    <select @bind="@SelectedTile.Tags" multiple @onfocusout="GenerateJsonOutput" >
+                                        @foreach (var name in TilesetProperties.Properties.Where(p => p.Type == "tag").Select(p => p.Name))
+                                        {
+                                            var n = name;
+                                            <option>@n</option>
+                                        }
+                                    </select>
+                                    <kbd>ctrl</kbd> to select multiple tags
                                 </label>
                             }
                         </fieldset>
                     }
                 </EditForm>
+                <div role="group">
+                    <button @onclick="@(() => ChangeTile(-1))">
+                        Previous tile
+                    </button>
+                    <button @onclick="@(() => ChangeTile(1))">
+                        Next tile
+                    </button>
+                </div>
             }
             else
             {
@@ -247,13 +275,26 @@
         }
         @if (CurrentTab == Tabs.Export)
         {
-            <pre>
-            <code>
-                    @Output
-                    </code>
-                </pre>
+            <pre><code>
+                @Output
+            </code></pre>
+
             <button @onclick="SaveFile">Save to file</button>
         }
+
+        <footer>
+            <label>
+                <input type="checkbox" role="switch" @bind="LargeSidebar" />
+                @if (!LargeSidebar)
+                {
+                    @:Small sidebar
+                }
+                else
+                {
+                    @:Large sidebar
+                }
+            </label>
+        </footer>
     </article>
 </main>
 

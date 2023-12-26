@@ -1,15 +1,3 @@
-.valid.modified:not([type=checkbox]) {
-    outline: 1px solid #26b050;
-}
-
-.invalid {
-    outline: 1px solid red;
-}
-
-.validation-message {
-    color: red;
-}
-
 #blazor-error-ui {
     background: lightyellow;
     bottom: 0;
@@ -49,15 +37,15 @@
 
     .loading-progress circle {
         fill: none;
-        stroke: #e0e0e0;
+        stroke: var(--pico-contrast-background);
         stroke-width: 0.6rem;
         transform-origin: 50% 50%;
         transform: rotate(-90deg);
     }
 
         .loading-progress circle:last-child {
-            stroke: #1b6ec2;
-            stroke-dasharray: calc(3.141 * var(--pico-blazor-load-percentage, 0%) * 0.8), 500%;
+            stroke: var(--pico-primary-hover-background);
+            stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
             transition: stroke-dasharray 0.05s ease-in-out;
         }
 
@@ -69,10 +57,10 @@
 }
 
     .loading-progress-text:after {
-        content: var(--pico-blazor-load-percentage-text, "Loading");
+        content: var(--blazor-load-percentage-text, "Loading");
     }
 
-::-webkit-scrollbar {
+/*::-webkit-scrollbar {
     width: 0.5rem;
 }
 
@@ -85,6 +73,10 @@
 
 ::-webkit-scrollbar-corner {
     background: #000;
+}*/
+
+select[multiple] option:checked {
+    color: var(--pico-form-element-color);
 }
 
 html, body {
@@ -98,6 +90,10 @@ html, body {
     grid-template-columns: 2fr 1fr;
     grid-template-rows: auto;
 }
+
+    .tool-container.large {
+        grid-template-columns: 1fr 2fr;
+    }
 
 @media (orientation: portrait) {
     .tool-container {
@@ -168,6 +164,7 @@ html, body {
     overflow-x: hidden;
     width: 100%;
 }
+
     .controls-container nav ul {
         display: flex;
         width: 100%;
@@ -175,15 +172,16 @@ html, body {
         flex-wrap: wrap;
         gap: 1rem;
     }
-    .controls-container nav ul li {
-        padding: 0;
-    }
 
-        fieldset {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
+        .controls-container nav ul li {
+            padding: 0;
         }
+
+fieldset {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
 
 .tool-container li {
     cursor: pointer;
