@@ -210,7 +210,7 @@
                     @if (SelectedTile.PropertyTypes is not null)
                     {
                         <fieldset>
-                            @foreach (var (name, type) in SelectedTile.PropertyTypes)
+                            @foreach (var (name, type) in SelectedTile.PropertyTypes.Where(p => p.Value != "tag"))
                             {
                                 var n = name;
                                 var t = type;
