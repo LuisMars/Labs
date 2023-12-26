@@ -32,7 +32,7 @@ jobs:
 
       # Publish the site
       - name: Publish
-        run: dotnet publish MarsLabs.sln -c:Release -o:publish -p:GHPages=true
+        run: dotnet publish MarsLabs.sln -c:Release -o:publish
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3  
         with:
