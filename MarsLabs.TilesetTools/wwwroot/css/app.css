@@ -177,9 +177,22 @@ html, body {
         }
 
 fieldset {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
     gap: 1rem;
+}
+
+[role="link"] {
+    cursor: pointer;
+}
+.delete {
+    color: var(--pico-del-color);
+}
+
+fieldset label {
+    flex-grow: 1;
+    flex-basis: min(50% - 1rem, 9rem);
 }
 
 .tool-container li {

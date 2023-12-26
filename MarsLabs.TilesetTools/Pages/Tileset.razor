@@ -60,7 +60,7 @@
                     <li><a aria-current=@(CurrentTab == Tabs.Tileset) @onclick="@(() => CurrentTab = Tabs.Tileset)">Tileset</a></li>
                     <li><a aria-current=@(CurrentTab == Tabs.Properties) @onclick="@(() => CurrentTab = Tabs.Properties)">Properties</a></li>
                     <li><a aria-current=@(CurrentTab == Tabs.Tile) @onclick="@(() => CurrentTab = Tabs.Tile)">Tile</a></li>
-                    <li><a aria-current=@(CurrentTab == Tabs.Export) @onclick="@(() => CurrentTab = Tabs.Export)">Export</a></li>
+                    <li><a aria-current=@(CurrentTab == Tabs.Export) @onclick="@(() => { CurrentTab = Tabs.Export; GenerateJsonOutput(); })">Export</a></li>
                 </ul>
             </nav>
         </header>
@@ -78,7 +78,7 @@
         @if (CurrentTab == Tabs.Tileset)
         {
             <EditForm Model="TilesetProperties">
-                <fieldset class="grid">
+                <fieldset>
                     <label>
                         Tile width
                         <InputNumber @onfocusout="ApplyGrid" @onclick="ApplyGrid" @bind-Value="TilesetProperties.TileWidth" />
@@ -94,7 +94,7 @@
                 </label>
 
                 <hr />
-                <fieldset class="grid">
+                <fieldset>
                     <label>
                         Tile gap width
                         <InputNumber @onfocusout="ApplyGrid" @onclick="ApplyGrid" @bind-Value="TilesetProperties.TileGapWidth" />
@@ -109,7 +109,7 @@
                     Link gap size
                 </label>
                 <hr />
-                <fieldset class="grid">
+                <fieldset>
                     <label>
                         Grid Color
                         <input type="color" @onfocusout="GenerateJsonOutput" @bind="TilesetProperties.GridColor" />
@@ -125,15 +125,36 @@
         {
             @if (TilesetProperties.Properties.Count > 0)
             {
-                <ul>
-                    @foreach (var name in TilesetProperties.Properties)
-                    {
-                        var n = name;
-                        <li @onclick=@(() => { GlobalProperty = n.Name; OldGlobalProperty = n.Name; GlobalPropertyType = n.Type; OldGlobalPropertyType = n.Type; })>
-                            @n.Name - @n.Type
-                        </li>
-                    }
-                </ul>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>
+                                Name
+                            </th>
+                            <th>
+                                Type
+                            </th>
+                            <th>
+                                Action
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var name in TilesetProperties.Properties)
+                        {
+                            var n = name;
+                            <tr>
+                                <td role="link" @onclick=@(() => { GlobalProperty = n.Name; OldGlobalProperty = n.Name; GlobalPropertyType = n.Type; OldGlobalPropertyType = n.Type; })>
+                                    @n.Name
+                                </td>
+                                <td>
+                                    @n.Type
+                                </td>
+                                <td role="link" class="delete" @onclick=@(() => DeleteProperty(n.Name))>Delete</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             }
             else
             {
@@ -297,6 +318,3 @@
         </footer>
     </article>
 </main>
-
-
-

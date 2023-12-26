@@ -1,5 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 using System.Text.Json;
+using System.Globalization;
 
 namespace MarsLabs.TilesetTools.Pages;
 
@@ -128,7 +129,29 @@ public class TilePropertiesConverter : JsonConverter<TileProperties>
                     tileProperties.Tags = [.. tags];
                     break;
                 default:
-                    tileProperties.StringValues[propName] = reader.GetString() ?? "";
+                    switch (reader.TokenType)
+                    {
+                        case JsonTokenType.String:
+                            tileProperties.StringValues[propName] = reader.GetString() ?? "";
+                            break;
+                        case JsonTokenType.Number:
+                            
+                            if (reader.TryGetInt32(out var intValue))
+                            {
+                                tileProperties.IntValues[propName] = intValue;
+                            }
+                            if (reader.TryGetSingle(out var floatValue))
+                            {
+                                tileProperties.FloatValues[propName] = floatValue;
+                            }
+                            break;
+                        case JsonTokenType.True:
+                            tileProperties.BoolValues[propName] = true;
+                            break;
+                        case JsonTokenType.False:
+                            tileProperties.BoolValues[propName] = false;
+                            break;
+                    }
                     break;
             }
         }
@@ -159,15 +182,23 @@ public class TilePropertiesConverter : JsonConverter<TileProperties>
             {
                 try
                 {
-                    // You should implement a more robust type handling based on 'type' value.
-                    // Here's a simplistic example for illustration.
                     switch (type)
                     {
                         case "int":
                             writer.WriteNumber(name, value.IntValues[name]);
                             break;
                         case "float":
-                            writer.WriteNumber(name, value.FloatValues[name]);
+                            var floatValue = value.FloatValues[name];
+                            // Ensure there is always a decimal point
+                            if (floatValue % 1 == 0) // It's a whole number
+                            {
+                                // Append .0 to make sure it's represented as a float
+                                writer.WriteNumber(name, Convert.ToDecimal($"{floatValue}.0", CultureInfo.InvariantCulture));
+                            }
+                            else
+                            {
+                                writer.WriteNumber(name, floatValue);
+                            }
                             break;
                         case "string":
                             writer.WriteString(name, value.StringValues[name]);

@@ -172,6 +172,22 @@ public partial class Tileset
         StateHasChanged();
     }
 
+    private void DeleteProperty(string name)
+    {
+        TilesetProperties.Properties.RemoveWhere(p => p.Name == name);
+        foreach (var item in Tiles.Values)
+        {
+            item.BoolValues.Remove(name);
+            item.StringValues.Remove(name);
+            item.IntValues.Remove(name);
+            item.FloatValues.Remove(name);
+            item.Tags = item.Tags.Where(t => t != name).ToArray();
+        }
+
+        GenerateJsonOutput();
+        StateHasChanged();
+    }
+
     private void AddGlobalProperties()
     {
         foreach (var item in Tiles)
