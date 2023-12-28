@@ -93,7 +93,8 @@ public partial class Tileset
         }
 
         DotNetHelper = DotNetObjectReference.Create(this);
-        await JsRuntime.InvokeAsync<string>("init", DotNetHelper);
+        await JsRuntime.InvokeVoidAsync("init", DotNetHelper);
+
         var properties = await LocalStorage.GetItemAsync<TilesetProperties>("TilesetProperties");
         if (properties is null)
         {
@@ -102,7 +103,7 @@ public partial class Tileset
         await LoadProperties(properties);
     }
 
-    private async Task LoadProperties(TilesetProperties? properties)
+    private async Task LoadProperties(TilesetProperties properties)
     {
         TilesetProperties = properties;
         Tiles = TilesetProperties.Tiles.ToDictionary(t => (t.Col, t.Row), t => t);
@@ -110,8 +111,12 @@ public partial class Tileset
         {
             await EditTileAsync(SelectedTile.Col, SelectedTile.Row);
         }
-        ImageSrc = await LocalStorage.GetItemAsync<string>(TilesetProperties.ImageFile);
-        await ApplyGridAsync();
+        if (!string.IsNullOrWhiteSpace(TilesetProperties.ImageFile))
+        {
+
+            ImageSrc = await LocalStorage.GetItemAsync<string>(TilesetProperties.ImageFile);
+            await ApplyGridAsync();
+        }
         StateHasChanged();
     }
 
@@ -367,7 +372,7 @@ public partial class Tileset
         {
             return;
         }
-        
+
         await SaveAsync();
         var directionX = 0;
         var directionY = 0;
