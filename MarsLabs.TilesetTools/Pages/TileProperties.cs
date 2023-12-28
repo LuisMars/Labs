@@ -6,7 +6,8 @@ namespace MarsLabs.TilesetTools.Pages;
 
 public class TilesetProperties
 {
-
+    public int ImageHeight { get; set; }
+    public int ImageWidth { get; set; }
     public int TileWidth { get; set; } = 16;
     public int TileHeight { get; set; } = 16;
     public bool LinkTileSize { get; set; } = true;
@@ -59,7 +60,6 @@ public class TileProperties
     public int Row { get; set; }
     public int Col { get; set; }
     public string Name { get; set; }
-    public string Id { get; set; }
     public Dictionary<string, string> StringValues { get; set; } = [];
     public Dictionary<string, bool> BoolValues { get; set; } = [];
     public Dictionary<string, int> IntValues { get; set; } = [];
@@ -72,7 +72,7 @@ public class TileProperties
         {
             return
                 !string.IsNullOrWhiteSpace(Name) ||
-                !string.IsNullOrWhiteSpace(Id) ||
+                Tags.Length > 0 ||
                 StringValues?.Count(p => p.Value is not null) > 0 ||
                 BoolValues?.Count(p => p.Value != default) > 0 ||
                 FloatValues?.Count(p => p.Value != default) > 0 ||
@@ -113,9 +113,6 @@ public class TilePropertiesConverter : JsonConverter<TileProperties>
                     break;
                 case "Name":
                     tileProperties.Name = reader.GetString() ?? "";
-                    break;
-                case "Id":
-                    tileProperties.Id = reader.GetString() ?? "";
                     break;
                 case "Tags":
                     var tags = new List<string>();
@@ -169,10 +166,6 @@ public class TilePropertiesConverter : JsonConverter<TileProperties>
         if (value.Name is not null)
         {
             writer.WriteString("Name", value.Name);
-        }
-        if (value.Id is not null)
-        {
-            writer.WriteString("Id", value.Id);
         }
 
         // Flatten and write properties from the dictionary

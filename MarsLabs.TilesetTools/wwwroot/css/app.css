@@ -144,7 +144,8 @@ html, body {
     border: var(--pico-border-width) solid var(--pico-form-element-border-color);
     bottom: 0;
     right: 0;
-    width: max(0.75rem, 20%);
+    width: 25%;
+    opacity: 0.75;   
     aspect-ratio: 1;
     border-radius: 100%;
 }

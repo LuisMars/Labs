@@ -1,7 +1,9 @@
+using Blazored.LocalStorage;
+using BlazorPanzoom;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
-using System;
 using System.Text.Json;
 
 namespace MarsLabs.TilesetTools.Pages;
@@ -9,14 +11,16 @@ public partial class Tileset
 {
     [Inject]
     public IJSRuntime JsRuntime { get; set; }
+
+    [Inject]
+    public ILocalStorageService LocalStorage { get; set; }
+
     public string? ImageData { get; set; }
     public string? ImageSrc { get; set; }
     private int NumRows { get; set; }
     private int NumCols { get; set; }
-    private int ImageHeight { get; set; }
-    private int ImageWidth { get; set; }
     private Dictionary<(int X, int Y), TileProperties> Tiles { get; set; } = [];
-    private TileProperties? SelectedTile { get; set; }
+    private List<TileProperties> SelectedTiles { get; set; } = [];
     private TilesetProperties TilesetProperties { get; set; } = new TilesetProperties();
     private string CustomPropertyName { get; set; } = "";
     private string CustomPropertyValue { get; set; } = "";
@@ -33,6 +37,9 @@ public partial class Tileset
     private string GlobalPropertyType { get; set; } = "string";
     private Tabs CurrentTab { get; set; } = Tabs.Import;
     public bool LargeSidebar { get; set; }
+
+    private DotNetObjectReference<Tileset>? DotNetHelper { get; set; }
+    private Panzoom Panzoom { get; set; }
     public enum Tabs
     {
         Tileset,
@@ -45,46 +52,77 @@ public partial class Tileset
     private async Task LoadImage(InputFileChangeEventArgs e)
     {
         var imageFile = e.File;
-        if (imageFile != null)
+        if (imageFile == null)
         {
-            TilesetProperties.ImageFile = e.File.Name;
-            var format = "image/png"; // or determine from file
-            var buffer = new byte[imageFile.Size];
-            await imageFile.OpenReadStream().ReadAsync(buffer);
-            ImageData = Convert.ToBase64String(buffer);
-            ImageSrc = $"data:{format};base64,{ImageData}";
-            // Calculate grid based on image dimensions
-            await GetImageDimensions();
-            ApplyGrid();
+            return;
         }
+
+        TilesetProperties.ImageFile = e.File.Name;
+        var format = "image/png"; // or determine from file
+        var buffer = new byte[imageFile.Size];
+        await imageFile.OpenReadStream().ReadAsync(buffer);
+        ImageData = Convert.ToBase64String(buffer);
+        ImageSrc = $"data:{format};base64,{ImageData}";
+        await LocalStorage.SetItemAsync(e.File.Name, ImageSrc);
+        // Calculate grid based on image dimensions
+        await GetImageDimensions();
+        await ApplyGridAsync();
     }
+
     private async Task LoadSaveFile(InputFileChangeEventArgs e)
     {
         using var fileStream = e.File.OpenReadStream();
-        TilesetProperties = await JsonSerializer.DeserializeAsync<TilesetProperties>(
+        var properties = await JsonSerializer.DeserializeAsync<TilesetProperties>(
             fileStream,
             new JsonSerializerOptions
             {
                 Converters = { new TilePropertiesConverter() },
-
             });
-        Tiles = TilesetProperties.Tiles.ToDictionary(t => (t.Col, t.Row), t => t);
-        if (SelectedTile is not null)
+        if (properties is null)
         {
-            EditTile(SelectedTile.Col, SelectedTile.Row);
+            return;
         }
-        ApplyGrid();
-        StateHasChanged(); 
+        await LoadProperties(properties);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        DotNetHelper = DotNetObjectReference.Create(this);
+        await JsRuntime.InvokeAsync<string>("init", DotNetHelper);
+        var properties = await LocalStorage.GetItemAsync<TilesetProperties>("TilesetProperties");
+        if (properties is null)
+        {
+            return;
+        }
+        await LoadProperties(properties);
+    }
+
+    private async Task LoadProperties(TilesetProperties? properties)
+    {
+        TilesetProperties = properties;
+        Tiles = TilesetProperties.Tiles.ToDictionary(t => (t.Col, t.Row), t => t);
+        foreach (var SelectedTile in SelectedTiles)
+        {
+            await EditTileAsync(SelectedTile.Col, SelectedTile.Row);
+        }
+        ImageSrc = await LocalStorage.GetItemAsync<string>(TilesetProperties.ImageFile);
+        await ApplyGridAsync();
+        StateHasChanged();
     }
 
     private async Task GetImageDimensions()
     {
         var dimensions = await JsRuntime.InvokeAsync<int[]>("getImageDimensions", ImageSrc);
-        ImageWidth = dimensions[0];
-        ImageHeight = dimensions[1];
+        TilesetProperties.ImageWidth = dimensions[0];
+        TilesetProperties.ImageHeight = dimensions[1];
     }
 
-    private void ApplyGrid()
+    private async Task ApplyGridAsync()
     {
         if (TilesetProperties.LinkTileSize)
         {
@@ -97,15 +135,20 @@ public partial class Tileset
         }
 
         // Assuming image dimensions are accessible via some variables like imageWidth and imageHeight
-        NumRows = (int)Math.Ceiling((float)ImageHeight / (TilesetProperties.TileHeight + TilesetProperties.TileGapHeight));
-        NumCols = (int)Math.Ceiling((float)ImageWidth / (TilesetProperties.TileWidth + TilesetProperties.TileGapHeight));
-        GenerateJsonOutput();
+        NumRows = (int)Math.Ceiling((float)TilesetProperties.ImageHeight / (TilesetProperties.TileHeight + TilesetProperties.TileGapHeight));
+        NumCols = (int)Math.Ceiling((float)TilesetProperties.ImageWidth / (TilesetProperties.TileWidth + TilesetProperties.TileGapHeight));
+        await SaveAsync();
     }
 
-    private void ChangeTile(int direction)
+    private async Task ChangeTileAsync(int directionX, int directionY = 0)
     {
-        var col = SelectedTile.Col + direction;
-        var row = SelectedTile.Row;
+        if (SelectedTiles.Count > 1)
+        {
+            return;
+        }
+        var selectedTile = SelectedTiles[0];
+        var col = selectedTile.Col + directionX;
+        var row = selectedTile.Row + directionY;
         if (col >= NumCols)
         {
             row++;
@@ -126,24 +169,41 @@ public partial class Tileset
             row = NumRows - 1;
             col = NumCols - 1;
         }
-        EditTile(col, row);
+        await EditTileAsync(col, row);
     }
 
-    private void EditTile(int col, int row)
+    private async Task EditTileAsync(int col, int row)
     {
+        if (await IsKeyDown("shift") && SelectedTiles.Count == 1)
+        {
+            var selectedTile = SelectedTiles[0];
+            for (var c = Math.Min(selectedTile.Col, col); c <= Math.Max(selectedTile.Col, col); c++)
+            {
+                for (var r = Math.Min(selectedTile.Row, row); r <= Math.Max(selectedTile.Row, row); r++)
+                {
+                    if (!Tiles.TryGetValue((c, r), out var t))
+                    {
+                        t = new TileProperties { Col = c, Row = r };
+                        Tiles[(c, r)] = t;
+                    }
+                    SelectedTiles.Add(t);
+                }
+            }
+            return;
+        }
+
         if (!Tiles.TryGetValue((col, row), out var tile))
         {
             tile = new TileProperties { Col = col, Row = row };
             Tiles[(col, row)] = tile;
         }
-
-        SelectedTile = tile;
+        SelectedTiles = [tile];
         CustomPropertyName = "";
         CustomPropertyValue = "";
         AddGlobalProperties();
         StateHasChanged();
     }
-    private void AddGlobalProperty()
+    private async Task AddGlobalPropertyAsync()
     {
         if (string.IsNullOrEmpty(GlobalProperty))
         {
@@ -160,7 +220,7 @@ public partial class Tileset
             OldGlobalProperty = "";
             AddGlobalProperties();
             StateHasChanged();
-            GenerateJsonOutput();
+            await SaveAsync();
 
             return;
         }
@@ -168,11 +228,11 @@ public partial class Tileset
         GlobalProperty = "";
         OldGlobalProperty = "";
         AddGlobalProperties();
-        GenerateJsonOutput();
+        await SaveAsync();
         StateHasChanged();
     }
 
-    private void DeleteProperty(string name)
+    private async Task DeletePropertyAsync(string name)
     {
         TilesetProperties.Properties.RemoveWhere(p => p.Name == name);
         foreach (var item in Tiles.Values)
@@ -184,7 +244,7 @@ public partial class Tileset
             item.Tags = item.Tags.Where(t => t != name).ToArray();
         }
 
-        GenerateJsonOutput();
+        await SaveAsync();
         StateHasChanged();
     }
 
@@ -257,8 +317,20 @@ public partial class Tileset
         }
     }
 
-    private void GenerateJsonOutput()
+    private async Task SaveAsync()
     {
+        if (SelectedTiles.Count > 0)
+        {
+            var selectedTile = SelectedTiles[0];
+            foreach (var tile in SelectedTiles.Skip(1))
+            {
+                tile.IntValues = selectedTile.IntValues.ToDictionary();
+                tile.FloatValues = selectedTile.FloatValues.ToDictionary();
+                tile.BoolValues = selectedTile.BoolValues.ToDictionary();
+                tile.StringValues = selectedTile.StringValues.ToDictionary();
+                tile.Tags = selectedTile.Tags.ToArray();
+            }
+        }
         var properties = Tiles.Where(t => t.Value.HasContent).Select(t => t.Value);
         TilesetProperties.Tiles = properties;
         Output = JsonSerializer.Serialize(TilesetProperties, new JsonSerializerOptions
@@ -268,15 +340,54 @@ public partial class Tileset
             Converters = { new TilePropertiesConverter() },
             IncludeFields = true,
         });
+
+        await LocalStorage.SetItemAsync("TilesetProperties", TilesetProperties);
     }
-    // This method is triggered when the button is clicked
+
     private async Task SaveFile()
     {
-        GenerateJsonOutput();
+        await SaveAsync();
         await JsRuntime.InvokeVoidAsync("navigator.clipboard.writeText", Output);
 
         byte[] file = System.Text.Encoding.UTF8.GetBytes(Output);
         await JsRuntime.InvokeVoidAsync("downloadFile", $"{TilesetProperties.ImageFile}.json", "text/json", file);
+    }
+
+    private async Task<bool> IsKeyDown(string key)
+    {
+        return await JsRuntime.InvokeAsync<bool>("isKeyDown", key);
+    }
+
+    [JSInvokable]
+    public async Task OnKey(int keyCode, bool keyUp)
+    {
+        //var key = (char)keyCode;
+        var isControlDown = await IsKeyDown("control");
+        if (keyUp || !isControlDown || (keyCode != 37 && keyCode != 39 && keyCode != 38 && keyCode != 40))
+        {
+            return;
+        }
+        
+        await SaveAsync();
+        var directionX = 0;
+        var directionY = 0;
+        if (keyCode == 39)
+        {
+            directionX = 1;
+        }
+        if (keyCode == 37)
+        {
+            directionX = -1;
+        }
+        if (keyCode == 38)
+        {
+            directionY = -1;
+        }
+        if (keyCode == 40)
+        {
+            directionY = 1;
+        }
+        await ChangeTileAsync(directionX, directionY);
     }
 }
 

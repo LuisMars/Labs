@@ -30,6 +30,8 @@
         <a class="dismiss">🗙</a>
     </div>
     <script src="_framework/blazor.webassembly.js"></script>
+    <script src="_content/BlazorPanzoom/panzoom.min.js"></script>
+    <script src="_content/BlazorPanzoom/blazorpanzoom.js"></script>
     <script>
         navigator.serviceWorker.register('service-worker.js');
 
@@ -42,7 +44,43 @@
                 img.src = imageSrc;
             });
         }
-        // Use it for .NET 6+
+        let keysDown = [];
+        window.onkeydown = (e) => {
+            if (!isKeyDown(e.key.toLowerCase())) {
+                keysDown.push(e.key.toLowerCase());
+            }
+            if (!app.instance) {
+                console.log("app.instance is false");
+                return;
+            }
+            if (!e.repeat) {
+                app.instance.invokeMethodAsync('OnKey', e.keyCode, false);
+            }
+        };
+        window.onkeyup = (e) => {
+            keysDown = keysDown.filter(item => item !== e.key.toLowerCase());
+            if (!app.instance) {
+                console.log("app.instance is false");
+                return;
+            }
+            if (!e.repeat) {
+                app.instance.invokeMethodAsync('OnKey', e.keyCode, true);
+            }
+        };
+
+        const app = {
+            instance: false
+        };
+
+        window.init = (dotNetHelper) => {
+            console.log("Initializing");
+            app.instance = dotNetHelper;
+        };
+
+        function isKeyDown(key) {
+            return keysDown.filter(item => item === key).length !== 0
+        }
+
         function downloadFile(filename, contentType, content) {
             // Create the URL
             const file = new File([content], filename, { type: contentType });

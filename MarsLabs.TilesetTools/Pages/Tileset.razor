@@ -1,20 +1,21 @@
-﻿@page "/tileset"
+﻿@page "/"
 @using System.IO
 @using System.Text.Json
+@using BlazorPanzoom
 
 <main class="tool-container @(LargeSidebar ? "large" : "")">
 
     <section class="tileset-container">
-        @if (ImageData is not null)
+        @if (ImageSrc is not null)
         {
             <style>
                 .tileset {
                     background-image: url("@(ImageSrc)");
                     grid-template-rows: repeat(@NumRows, 1fr);
                     grid-template-columns: repeat(@NumCols, 1fr);
-                    aspect-ratio: @ImageWidth / @ImageHeight;
-                    width: calc(100% * @ImageWidth / @ImageHeight);
-                    gap: @(((float)ImageWidth / ImageHeight) * TilesetProperties.TileGapHeight)px @(((float)ImageWidth / ImageHeight) * TilesetProperties.TileGapWidth)px;
+                    aspect-ratio: @TilesetProperties.ImageWidth / @TilesetProperties.ImageHeight;
+                    width: calc(100% * @TilesetProperties.ImageWidth / @TilesetProperties.ImageHeight);
+                    gap: @(((float)TilesetProperties.ImageWidth / TilesetProperties.ImageHeight) * TilesetProperties.TileGapHeight)px @(((float)TilesetProperties.ImageWidth / TilesetProperties.ImageHeight) * TilesetProperties.TileGapWidth)px;
                 }
 
                     .tileset .tile {
@@ -22,25 +23,26 @@
                     }
 
             </style>
-
-            <div class="tileset">
-                @for (int row = 0; row < NumRows; row++)
-                {
-                    for (int col = 0; col < NumCols; col++)
+            <Panzoom @ref="Panzoom" PanzoomOptions=@(new PanzoomOptions { MaxScale = 10 }) WheelMode="@WheelMode.ZoomWithWheel" >                
+                <div @ref="@context.ElementReference" class="tileset">
+                    @for (int row = 0; row < NumRows; row++)
                     {
-                        var r = row;
-                        var c = col;
-                        var selected = SelectedTile?.Col == c && SelectedTile.Row == r;
-                        var hasTile = Tiles.TryGetValue((c, r), out var tile);
-                        <div class="tile @(selected ? "selected" : "")" @onclick="() => EditTile(c, r)" data-tooltip="@($"({c}, {r}) - {tile?.Name ?? "unset"}")">
-                            @if (hasTile && tile!.HasContent)
-                            {
-                                <span class="tile-used"></span>
-                            }
-                        </div>
+                        for (int col = 0; col < NumCols; col++)
+                        {
+                            var r = row;
+                            var c = col;
+                            var selected = SelectedTiles.Any(SelectedTile => SelectedTile?.Col == c && SelectedTile.Row == r);
+                            var hasTile = Tiles.TryGetValue((c, r), out var tile);
+                            <div class="tile @(selected ? "selected" : "")" @onclick="e => EditTileAsync(c, r)">  @* data-tooltip="@($"({c}, {r}) - {tile?.Name ?? "unset"}")" *@
+                                @if (hasTile && tile!.HasContent)
+                                {
+                                    <span class="tile-used"></span>
+                                }
+                            </div>
+                        }
                     }
-                }
-            </div>
+                </div>
+            </Panzoom>
         }
         else
         {
@@ -60,7 +62,7 @@
                     <li><a aria-current=@(CurrentTab == Tabs.Tileset) @onclick="@(() => CurrentTab = Tabs.Tileset)">Tileset</a></li>
                     <li><a aria-current=@(CurrentTab == Tabs.Properties) @onclick="@(() => CurrentTab = Tabs.Properties)">Properties</a></li>
                     <li><a aria-current=@(CurrentTab == Tabs.Tile) @onclick="@(() => CurrentTab = Tabs.Tile)">Tile</a></li>
-                    <li><a aria-current=@(CurrentTab == Tabs.Export) @onclick="@(() => { CurrentTab = Tabs.Export; GenerateJsonOutput(); })">Export</a></li>
+                    <li><a aria-current=@(CurrentTab == Tabs.Export) @onclick="@(() => { CurrentTab = Tabs.Export; SaveAsync(); })">Export</a></li>
                 </ul>
             </nav>
         </header>
@@ -81,15 +83,15 @@
                 <fieldset>
                     <label>
                         Tile width
-                        <InputNumber @onfocusout="ApplyGrid" @onclick="ApplyGrid" @bind-Value="TilesetProperties.TileWidth" />
+                        <InputNumber @onfocusout="ApplyGridAsync" @onclick="ApplyGridAsync" @bind-Value="TilesetProperties.TileWidth" />
                     </label>
                     <label>
                         Tile height
-                        <InputNumber disabled=@TilesetProperties.LinkTileSize @onfocusout="ApplyGrid" @onclick="ApplyGrid" @bind-Value="TilesetProperties.TileHeight" />
+                        <InputNumber disabled=@TilesetProperties.LinkTileSize @onfocusout="ApplyGridAsync" @onclick="ApplyGridAsync" @bind-Value="TilesetProperties.TileHeight" />
                     </label>
                 </fieldset>
                 <label>
-                    <input type="checkbox" role="switch" @bind="TilesetProperties.LinkTileSize" @onfocusout="GenerateJsonOutput" />
+                    <input type="checkbox" role="switch" @bind="TilesetProperties.LinkTileSize" @onfocusout="SaveAsync" />
                     Link size
                 </label>
 
@@ -97,26 +99,26 @@
                 <fieldset>
                     <label>
                         Tile gap width
-                        <InputNumber @onfocusout="ApplyGrid" @onclick="ApplyGrid" @bind-Value="TilesetProperties.TileGapWidth" />
+                        <InputNumber @onfocusout="ApplyGridAsync" @onclick="ApplyGridAsync" @bind-Value="TilesetProperties.TileGapWidth" />
                     </label>
                     <label>
                         Tile gap height
-                        <InputNumber disabled=@TilesetProperties.LinkTileGapSize @onfocusout="ApplyGrid" @onclick="ApplyGrid" @bind-Value="TilesetProperties.TileGapHeight" />
+                        <InputNumber disabled=@TilesetProperties.LinkTileGapSize @onfocusout="ApplyGridAsync" @onclick="ApplyGridAsync" @bind-Value="TilesetProperties.TileGapHeight" />
                     </label>
                 </fieldset>
                 <label>
-                    <input type="checkbox" role="switch" @bind="TilesetProperties.LinkTileGapSize" @onfocusout="GenerateJsonOutput" />
+                    <input type="checkbox" role="switch" @bind="TilesetProperties.LinkTileGapSize" @onfocusout="SaveAsync" />
                     Link gap size
                 </label>
                 <hr />
                 <fieldset>
                     <label>
                         Grid Color
-                        <input type="color" @onfocusout="GenerateJsonOutput" @bind="TilesetProperties.GridColor" />
+                        <input type="color" @onfocusout="SaveAsync" @bind="TilesetProperties.GridColor" />
                     </label>
                     <label>
                         Grid Alpha
-                        <input type="range" min="0" max="255" @onfocusout="GenerateJsonOutput" @bind="TilesetProperties.GridColorAlpha" />
+                        <input type="range" min="0" max="255" @onfocusout="SaveAsync" @bind="TilesetProperties.GridColorAlpha" />
                     </label>
                 </fieldset>
             </EditForm>
@@ -150,7 +152,7 @@
                                 <td>
                                     @n.Type
                                 </td>
-                                <td role="link" class="delete" @onclick=@(() => DeleteProperty(n.Name))>Delete</td>
+                                <td role="link" class="delete" @onclick=@(() => DeletePropertyAsync(n.Name))>Delete</td>
                             </tr>
                         }
                     </tbody>
@@ -204,34 +206,41 @@
                     </select>
                 </label>
             </fieldset>
-            <button @onclick="AddGlobalProperty">@(isAdding ? "Add" : "Edit") property</button>
+            <button @onclick="AddGlobalPropertyAsync">@(isAdding ? "Add" : "Edit") property</button>
         }
         @if (CurrentTab == Tabs.Tile)
         {
-            @if (SelectedTile is not null)
+            @if (SelectedTiles.Count > 0)
             {
-                <h6>
-                    (@SelectedTile.Col, @SelectedTile.Row)
-                </h6>
-                <EditForm Model="SelectedTile" class="tile-properties-container">
+                var multiSelection = SelectedTiles.Count > 1;
+                var selectedTile = SelectedTiles[0];                
+                @if (!multiSelection) {
+                    <h6>
+                        (@selectedTile.Col, @selectedTile.Row)
+                    </h6>
+                } else
+                {
+                    <h6>
+                        Multiple tiles selected
+                    </h6>
+                }
+                <EditForm Model="selectedTile" class="tile-properties-container" >
 
-                    <fieldset>
-                        <label>
-                            Name
-                            <InputText type="string" @onfocusout="GenerateJsonOutput" @bind-Value="SelectedTile.Name" />
-                        </label>
-                        <label>
-                            Id
-                            <InputText type="string" @onfocusout="GenerateJsonOutput" @bind-Value="SelectedTile.Id" />
-                        </label>
-                    </fieldset>
-
-                    <h3>Properties</h3>
-
-                    @if (SelectedTile.PropertyTypes is not null)
+                    @if (!multiSelection)
                     {
                         <fieldset>
-                            @foreach (var (name, type) in SelectedTile.PropertyTypes.Where(p => p.Value != "tag"))
+                            <label>
+                                Name
+                                <InputText @onblur="SaveAsync" @bind-Value="selectedTile.Name" />
+                            </label>
+                        </fieldset>
+                    }
+                    <h3>Properties</h3>
+
+                    @if (selectedTile.PropertyTypes is not null)
+                    {
+                        <fieldset>
+                            @foreach (var (name, type) in selectedTile.PropertyTypes.Where(p => p.Value != "tag"))
                             {
                                 var n = name;
                                 var t = type;
@@ -240,22 +249,22 @@
                                     @if (t == "string")
                                     {
                                         @n
-                                        <InputText @bind-Value="@SelectedTile.StringValues[n]" @onfocusout="GenerateJsonOutput" />
+                                        <InputText @bind-Value="@selectedTile.StringValues[n]" @onfocusout="SaveAsync" />
                                     }
                                     else if (t == "bool")
                                     {
-                                        <InputCheckbox @bind-Value="@SelectedTile.BoolValues[n]" @onfocusout="GenerateJsonOutput" />
+                                        <InputCheckbox @bind-Value="@selectedTile.BoolValues[n]" @onfocusout="SaveAsync" />
                                         @n
                                     }
                                     else if (t == "int")
                                     {
                                         @n
-                                        <InputNumber @bind-Value="@SelectedTile.IntValues[n]" step="1" @onfocusout="GenerateJsonOutput" />
+                                        <InputNumber @bind-Value="@selectedTile.IntValues[n]" step="1" @onfocusout="SaveAsync" />
                                     }
                                     else if (t == "float")
                                     {
                                         @n
-                                        <InputNumber @bind-Value="@SelectedTile.FloatValues[n]" step="0.1" @onfocusout="GenerateJsonOutput" />
+                                        <InputNumber @bind-Value="@selectedTile.FloatValues[n]" step="0.1" @onfocusout="SaveAsync" />
                                     }
                                 </label>
                             }   
@@ -265,7 +274,7 @@
                             {
                                 <label>
                                     Tags 
-                                    <select @bind="@SelectedTile.Tags" multiple @onfocusout="GenerateJsonOutput" >
+                                    <select @bind="@selectedTile.Tags" multiple @onfocusout="SaveAsync" >
                                         @foreach (var name in TilesetProperties.Properties.Where(p => p.Type == "tag").Select(p => p.Name))
                                         {
                                             var n = name;
@@ -279,10 +288,10 @@
                     }
                 </EditForm>
                 <div role="group">
-                    <button @onclick="@(() => ChangeTile(-1))">
+                    <button @onclick="@(() => ChangeTileAsync(-1))">
                         Previous tile
                     </button>
-                    <button @onclick="@(() => ChangeTile(1))">
+                    <button @onclick="@(() => ChangeTileAsync(1))">
                         Next tile
                     </button>
                 </div>
